@@ -46,15 +46,7 @@ public class DataPreprocessor implements Consumer<Article> {
   //////////////////////////////////////////////////////////////////////////////
   
   public static final Set<String> FOLD1 = DataPreprocessor.makeSet(
-      "politico", "addicting-info", "right-wing-news"
-  );
-  
-  public static final Set<String> FOLD2 = DataPreprocessor.makeSet(
-      "abc", "the-other-98", "freedom-daily"
-  );
-  
-  public static final Set<String> FOLD3 = DataPreprocessor.makeSet(
-      "cnn", "occupy-democrats", "eagle-rising"
+      ""
   );
 
   //////////////////////////////////////////////////////////////////////////////
@@ -63,9 +55,7 @@ public class DataPreprocessor implements Consumer<Article> {
   
   private final File outputDirectory;
   
-  private final CasWriter[] trainingDirectories;
-  
-  private final CasWriter[] testDirectories;
+  private final CasWriter[] trainingDirectory;
 
   //////////////////////////////////////////////////////////////////////////////
   //                              CONSTRUCTOR                                 //
@@ -79,16 +69,8 @@ public class DataPreprocessor implements Consumer<Article> {
     }
     this.outputDirectory = outputDirectory;
     
-    this.trainingDirectories = new CasWriter[] {
-      this.createWriter("fold1-training"),
-      this.createWriter("fold2-training"),
-      this.createWriter("fold3-training"),
-    };
-    
-    this.testDirectories = new CasWriter[] {
-      this.createWriter("fold1-test"),
-      this.createWriter("fold2-test"),
-      this.createWriter("fold3-test"),
+    this.trainingDirectory = new CasWriter[] {
+      this.createWriter("training")
     };
   }
 
@@ -115,24 +97,12 @@ public class DataPreprocessor implements Consumer<Article> {
   
   protected CasWriter[] getTargetWriters(final Article article) {
     final String portal = article.getPortal();
-    if (FOLD1.contains(portal)) {
-      return new CasWriter[] {
-          this.testDirectories[0],
-          this.trainingDirectories[1], this.trainingDirectories[2]
+    if (FOLD1.contains("")) {
+      return new CasWriter[]{
+              this.trainingDirectory[0]
       };
-    } else if (FOLD2.contains(portal)) {
-      return new CasWriter[] {
-          this.testDirectories[1],
-          this.trainingDirectories[0], this.trainingDirectories[2]
-      };
-    } else if (FOLD3.contains(portal)) {
-      return new CasWriter[] {
-          this.testDirectories[2],
-          this.trainingDirectories[0], this.trainingDirectories[1]
-      };
-    } else {
-      throw new IllegalArgumentException("Unknown portal: " + portal);
     }
+    return new CasWriter[] {};
   }
   
   private static final Set<String> makeSet(final String... entries) {
