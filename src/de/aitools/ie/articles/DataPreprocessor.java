@@ -34,43 +34,45 @@ public class DataPreprocessor implements Consumer<Article> {
   //////////////////////////////////////////////////////////////////////////////
 
   private static final String TYPE_SYSTEM_NAME =
-      "/uima-descriptors/type-systems/ArticleTypeSystem.xml";
+          "/uima-descriptors/type-systems/ArticleTypeSystem.xml";
 
   private static final TypeSystemDescription TYPE_SYSTEM =
-      DataPreprocessor.createTypeSystem();
+          DataPreprocessor.createTypeSystem();
 
   private static final String TITLE_SEPARATOR = "\n\n";
 
   //////////////////////////////////////////////////////////////////////////////
   //                                  FOLDS                                   //
   //////////////////////////////////////////////////////////////////////////////
-  
+
   public static final Set<String> FOLD1 = DataPreprocessor.makeSet(
-      ""
+          ""
   );
 
   //////////////////////////////////////////////////////////////////////////////
   //                                 MEMBERS                                  //
   //////////////////////////////////////////////////////////////////////////////
-  
+
   private final File outputDirectory;
-  
+
+  public final String veracityType;
+
   private final CasWriter[] trainingDirectory;
 
   //////////////////////////////////////////////////////////////////////////////
   //                              CONSTRUCTOR                                 //
   //////////////////////////////////////////////////////////////////////////////
-  
-  public DataPreprocessor(final File outputDirectory)
-  throws IOException {
+
+  public DataPreprocessor(final File outputDirectory, final String veracityType)
+          throws IOException {
     outputDirectory.mkdirs();
     if (!outputDirectory.isDirectory()) {
       throw new IOException("Not a directory " + outputDirectory);
     }
     this.outputDirectory = outputDirectory;
-    
+    this.veracityType = veracityType;
     this.trainingDirectory = new CasWriter[] {
-      this.createWriter("training")
+            this.createWriter("training", veracityType)
     };
   }
 
@@ -89,12 +91,12 @@ public class DataPreprocessor implements Consumer<Article> {
   //////////////////////////////////////////////////////////////////////////////
   //                                 HELPERS                                  //
   //////////////////////////////////////////////////////////////////////////////
-  
-  protected CasWriter createWriter(final String part) {
+
+  protected CasWriter createWriter(final String part, final String veracityType) {
     return new CasWriter(
-        new File(this.outputDirectory, part).toPath());
+            new File(this.outputDirectory, part).toPath(), veracityType);
   }
-  
+
   protected CasWriter[] getTargetWriters(final Article article) {
     final String portal = article.getPortal();
     if (FOLD1.contains("")) {
@@ -104,7 +106,7 @@ public class DataPreprocessor implements Consumer<Article> {
     }
     return new CasWriter[] {};
   }
-  
+
   private static final Set<String> makeSet(final String... entries) {
     final Set<String> set = new HashSet<>(entries.length);
     for (final String entry : entries) {
@@ -116,15 +118,16 @@ public class DataPreprocessor implements Consumer<Article> {
   //////////////////////////////////////////////////////////////////////////////
   //                              UIMA Conversion                             //
   //////////////////////////////////////////////////////////////////////////////
-  
+
   public static class CasWriter implements Consumer<CAS> {
-    
+
     private final Path outputFolder;
-    
+    private final String veracityType;
     private int count;
-    
-    public CasWriter(final Path outputFolder) {
+
+    public CasWriter(final Path outputFolder, final String veracityType) {
       outputFolder.toFile().mkdirs();
+      this.veracityType = veracityType;
       this.outputFolder = outputFolder;
       this.count = 0;
     }
@@ -133,7 +136,9 @@ public class DataPreprocessor implements Consumer<Article> {
     public synchronized void accept(final CAS cas) {
       String name = String.format("%010d", this.count);
       try {
-        final File outputFile = new File(outputFolder + "/" + name + ".xmi");
+        // Hier wird der Dateiname mit dem Veracity-Wert angepasst
+        String filename = String.format("%s-%s-%s.xmi", name, veracityType, this.count);
+        final File outputFile = new File(outputFolder + "/" + filename);
         System.out.println("Writing to " + outputFile);
         UIMAAnnotationFileWriter.write(cas, outputFile);
       } catch (final IOException e) {
@@ -141,7 +146,7 @@ public class DataPreprocessor implements Consumer<Article> {
       }
       this.count++;
     }
-    
+
   }
 
   public static CAS toCas(final Article article) {
@@ -152,12 +157,12 @@ public class DataPreprocessor implements Consumer<Article> {
       jcas.setDocumentLanguage(Locale.ENGLISH.getCountry());
 
       final int textOffset =
-          article.getTitle().length() + TITLE_SEPARATOR.length();
+              article.getTitle().length() + TITLE_SEPARATOR.length();
       jcas.setDocumentText(
-          article.getTitle() + TITLE_SEPARATOR + article.getMainText());
+              article.getTitle() + TITLE_SEPARATOR + article.getMainText());
 
       final ArticleMetaData meta = new ArticleMetaData(
-          jcas, 0, jcas.getDocumentText().length());
+              jcas, 0, jcas.getDocumentText().length());
       meta.setUri(article.getUri());
       meta.setAuthor(article.getAuthor());
       meta.setPortal(article.getPortal());
@@ -172,7 +177,7 @@ public class DataPreprocessor implements Consumer<Article> {
       title.addToIndexes();
 
       final MainText mainText = new MainText(
-          jcas, textOffset, jcas.getDocumentText().length());
+              jcas, textOffset, jcas.getDocumentText().length());
       mainText.addToIndexes();
 
       for (final Span paragraph : article.getParagraphs()) {
@@ -195,7 +200,7 @@ public class DataPreprocessor implements Consumer<Article> {
   private static CAS createCas() {
     try {
       return CasCreationUtils.createCas(
-          DataPreprocessor.TYPE_SYSTEM, null, null);
+              DataPreprocessor.TYPE_SYSTEM, null, null);
     } catch (final ResourceInitializationException e) {
       throw new IllegalStateException(e);
     }
@@ -203,15 +208,15 @@ public class DataPreprocessor implements Consumer<Article> {
 
   private static TypeSystemDescription createTypeSystem()  {
     final URL typeSystemUrl =
-        DataPreprocessor.class.getResource(TYPE_SYSTEM_NAME);
+            DataPreprocessor.class.getResource(TYPE_SYSTEM_NAME);
     if (typeSystemUrl == null) {
       throw new IllegalStateException(
-          "Could not load type system from resource: "
-              + TYPE_SYSTEM_NAME);
+              "Could not load type system from resource: "
+                      + TYPE_SYSTEM_NAME);
     }
     try {
       return UIMAFramework.getXMLParser().parseTypeSystemDescription(
-          new XMLInputSource(typeSystemUrl));
+              new XMLInputSource(typeSystemUrl));
     } catch (final InvalidXMLException | IOException e) {
       throw new IllegalStateException(e);
     }
@@ -220,15 +225,19 @@ public class DataPreprocessor implements Consumer<Article> {
   //////////////////////////////////////////////////////////////////////////////
   //                                     MAIN                                 //
   //////////////////////////////////////////////////////////////////////////////
-  
+
   public static void main(final String[] args) throws IOException {
+    if (args.length < 3) {
+      System.err.println("Usage: java -cp acl18-bundle.jar de.aitools.ie.articles.DataPreprocessor <inputFolder> <outputFolder> <veracityType>");
+      System.exit(1);
+    }
+
     final Path inputFolder = Paths.get(args[0]);
     final Path outputFolder = Paths.get(args[1]);
-    
+    final String veracityType = args[2];  // "true" or "false"
+
     final DataPreprocessor preprocessor =
-        new DataPreprocessor(outputFolder.toFile());
+            new DataPreprocessor(outputFolder.toFile(), veracityType);
     Article.readAll(inputFolder).forEach(preprocessor);
   }
-  
-
 }
